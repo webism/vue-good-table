@@ -1,12 +1,12 @@
 <template>
-  <div class="good-table">
     <div :class="{'responsive': responsive}">
-      <div v-if="title" class="table-header clearfix">
+  <div class="good-table">
+       <div v-if="title" class="table-header clearfix">
         <h2 class="table-title pull-left">{{title}}</h2>
         <div class="actions pull-right">
         </div>
       </div>
-      <table ref="table" :class="styleClass">
+      <table ref="table" class="table table-bordered table-striped table-sm">
         <thead>
           <tr v-if="globalSearch && externalSearchQuery == null">
             <td :colspan="lineNumbers ? columns.length + 1: columns.length">
@@ -21,7 +21,8 @@
           <tr>
             <th v-if="lineNumbers" class="line-numbers"></th>
             <th v-for="(column, index) in columns"
-              @click="sort(index)"
+              v-bind:key="column.label"
+              @click="sort(column,index)"
               :class="columnHeaderClass(column, index)"
               :style="{width: column.width ? column.width : 'auto'}"
               v-if="!column.hidden">
@@ -31,23 +32,36 @@
           </tr>
           <tr v-if="hasFilterRow">
             <th v-if="lineNumbers"></th>
-            <th v-for="(column, index) in columns">
-              <input v-if="column.filterable" type="text" class="form-control" v-bind:placeholder="'Filter ' + column.label"
+            <th v-for="(column, index) in columns" v-bind:key="column.label">
+              <input v-if="column.filterable && ! column.filterableDropDown && ! column.filterableTimePicker" type="text" class="form-control" v-bind:placeholder="'فیلتر ' + column.label"
               v-bind:value="columnFilters[column.field]"
-              v-on:input="updateFilters(column, $event.target.value)">
+              v-on:input="updateFilters(column, $event.target.value)"
+              >
+              <select v-if="column.filterableDropDown" class="form-control"   v-on:change="updateFilters(column, $event.target.value)" >
+   <option  v-bind:key="filterValue"   v-for="filterValue in column.filterValue"  v-bind:value="filterValue.key"  >{{filterValue.lable}}</option>
+   <option   value="" selected>بدون فیلتر</option>
+
+</select>
+       <pdatepicker v-if="column.filterableTimePicker" v-on:selected='dateSelected' :value='date'></pdatepicker>
+
             </th>
           </tr>
         </thead>
 
         <tbody>
-          <tr v-for="(row, index) in paginated" :class="onClick ? 'clickable' : ''" @click="click(row, index)">
+          <tr  v-for="(row, index) in paginated" :class="onClick ? 'clickable' : ''" @click="click(row, index)"  v-bind:key="index" >
             <th v-if="lineNumbers" class="line-numbers">{{ getCurrentIndex(index) }}</th>
             <slot name="table-row" :row="row" :index="index">
-              <td v-for="(column, i) in columns" :class="getDataStyle(i, 'td')" v-if="!column.hidden">
+              <td   v-bind:key="i"  v-for="(column, i) in columns" :class="getDataStyle(i, 'td')" v-if="!column.hidden">
                 <span v-if="!column.html">{{ collectFormatted(row, column) }}</span>
                 <span v-if="column.html" v-html="collect(row, column.field)"></span>
               </td>
             </slot>
+          </tr>
+          <tr v-if="loading">
+            <td v-bind:colspan="columns.length">
+              <vue-simple-spinner></vue-simple-spinner>
+            </td>
           </tr>
 
         </tbody>
@@ -59,35 +73,39 @@
         <label>
           <span>{{rowsPerPageText}}</span>
           <span v-if="perPage" class="perpage-count">{{perPage}}</span>
-          <select v-if="!perPage" class="browser-default" @change="onTableLength">
+          <select v-if="!perPage"    class="browser-default" @change="onTableLength">
             <option value="10">10</option>
             <option value="20">20</option>
             <option value="30">30</option>
             <option value="40">40</option>
             <option value="50">50</option>
-            <option value="-1">All</option>
+            <option value="-1">نمایش همه</option>
           </select>
         </label>
       </div>
-      <div class="pagination-controls pull-right">
-        <a href="javascript:undefined" class="page-btn" @click.prevent.stop="previousPage" tabindex="0">
-          <span class="chevron left"></span>
-          <span>{{prevText}}</span>
-        </a>
-        <div class="info">{{paginatedInfo}}</div>
-        <a href="javascript:undefined" class="page-btn" @click.prevent.stop="nextPage" tabindex="0">
-          <span>{{nextText}}</span>
-          <span class="chevron right"></span>
-        </a>
+      <div class="pull-right">
+        <ul class="pagination" > 
+        <li class="page-item"><a class="page-link" href="javascript:undefined" c  @click.prevent.stop="previousPage" tabindex="0">
+          <i class="fa fa-chevron-right" style="font-size:8px" aria-hidden="true"></i>
+          {{prevText}} 
+        </a></li>
+         <li class="page-item"><a  class="page-link" >{{paginatedInfo}}</a></li>
+          <li class="page-item"><a href="javascript:undefined" class="page-link" @click.prevent.stop="nextPage" tabindex="0">
+        {{nextText}} 
+         <i class="fa fa-chevron-left" style="font-size:8px" aria-hidden="true"></i>
+        </a></li>
+        </ul>
       </div>
     </div>
-  </div>
-</template>
+   </div>
+ </template>
 
 <script>
 import parse from 'date-fns/parse';
 import format from 'date-fns/format';
 import compareAsc from 'date-fns/compare_asc';
+import Spinner from 'vue-simple-spinner'
+
   export default {
     name: 'vue-good-table',
     props: {
@@ -95,7 +113,9 @@ import compareAsc from 'date-fns/compare_asc';
       title: '',
       columns: {},
       rows: {},
+      loading: {default: false},
       onClick: {},
+      date: null,
       perPage: {},
       sortable: {default: true},
       paginate: {default: false},
@@ -110,10 +130,10 @@ import compareAsc from 'date-fns/compare_asc';
 
       // text options
       globalSearchPlaceholder: {default: 'Search Table'},
-      nextText: {default: 'Next'},
-      prevText: {default: 'Prev'},
-      rowsPerPageText: {default: 'Rows per page:'},
-      ofText: {default: 'of'},
+      nextText: {default: 'بعدی'},
+      prevText: {default: 'قبلی'},
+      rowsPerPageText: {default: 'تعداد نمایش در هر صفحه:'},
+      ofText: {default: 'از'},
     },
 
     data: () => ({
@@ -135,19 +155,18 @@ import compareAsc from 'date-fns/compare_asc';
         if (this.processedRows.length > this.currentPerPage * this.currentPage)
           ++this.currentPage;
       },
-
-      previousPage() {
-
+      dateSelected (row) {
+      },
+      previousPage () {
         if (this.currentPage > 1)
           --this.currentPage;
       },
-
       onTableLength(e) {
         this.currentPerPage = e.target.value;
       },
-
-      sort(index) {
-        if (!this.sortable)
+      sort(col,index) {
+        
+         if (!this.sortable && !col.sortable)
           return;
         if (this.sortColumn === index) {
           this.sortType = this.sortType === 'asc' ? 'desc' : 'asc';
@@ -231,6 +250,8 @@ import compareAsc from 'date-fns/compare_asc';
       // Get the necessary style-classes for the given column
       //--------------------------------------------------------
       columnHeaderClass(column, index){
+        if(!column.sortable)
+        return;
         var classString = '';
         if (this.sortable) {
           classString += 'sorting ';
@@ -261,7 +282,7 @@ import compareAsc from 'date-fns/compare_asc';
               classString = 'right-align ';
             break;
             default:
-              classString = 'left-align ';
+              classString = 'left-right ';
               break;
           }
         }
@@ -407,10 +428,9 @@ import compareAsc from 'date-fns/compare_asc';
           }
           computedRows = filteredRows;
         }
-
+ 
         //taking care of sort here only if sort has changed
         if (this.sortable !== false && this.sortColumn !== -1 &&
-
           // if search trigger is enter then we only sort
           // when enter is hit
           (this.searchTrigger != 'enter' || this.sortChanged)) {
@@ -490,7 +510,7 @@ import compareAsc from 'date-fns/compare_asc';
         infoStr += (this.currentPage - 1) * this.currentPerPage ? (this.currentPage - 1) * this.currentPerPage : 1;
         infoStr += ' - ';
         infoStr += Math.min(this.processedRows.length, this.currentPerPage * this.currentPage);
-        infoStr += ' of ';
+        infoStr += ' از ';
         infoStr += this.processedRows.length;
         if(this.currentPerPage == -1){
           return '1 - ' + this.processedRows.length + ' ' + this.ofText + ' ' + this.processedRows.length;
@@ -522,6 +542,9 @@ import compareAsc from 'date-fns/compare_asc';
           }
         }
       }
+    },
+    components: {
+      Spinner
     }
   }
 </script>
@@ -530,6 +553,21 @@ import compareAsc from 'date-fns/compare_asc';
 
 /* Utility styles
 ************************************************/
+.drop-down-filter {
+  height: 34px;
+  padding:8px 12px;
+  font-size:14px;
+      background-color: #fff;
+    background-image: none;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    -webkit-box-shadow: inset 0 1px 1px rgba(35,41,53,.075);
+    box-shadow: inset 0 1px 1px rgba(35,41,53,.075);
+    -webkit-transition: border-color ease-in-out .15s,-webkit-box-shadow ease-in-out .15s;
+    transition: border-color ease-in-out .15s,-webkit-box-shadow ease-in-out .15s;
+    transition: border-color ease-in-out .15s,box-shadow ease-in-out .15s;
+    transition: border-color ease-in-out .15s,box-shadow ease-in-out .15s,-webkit-box-shadow ease-in-out .15s;
+}
 .right-align{
   text-align: right;
 }
@@ -564,19 +602,36 @@ import compareAsc from 'date-fns/compare_asc';
     width: 100%;
     max-width: 100%;
   }
+  .browser-default{
+     /* width: 100%; */
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    line-height: 1.25;
+    color: #607d8b;
+    background-color: #fff;
+    background-image: none;
+    background-clip: padding-box;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 0;
+    -webkit-transition: border-color ease-in-out 0.15s, -webkit-box-shadow ease-in-out 0.15s;
+    transition: border-color ease-in-out 0.15s, -webkit-box-shadow ease-in-out 0.15s;
+    transition: border-color ease-in-out 0.15s, box-shadow ease-in-out 0.15s;
+    transition: border-color ease-in-out 0.15s, box-shadow ease-in-out 0.15s, -webkit-box-shadow ease-in-out 0.15s;
+  }
 
   .table.table-striped tbody tr:nth-of-type(odd) {
-      background-color: rgba(35,41,53,.05);
+      background-color:  #f6fbff;
   }
 
   .table.table-bordered td, .table-bordered th {
-      border: 1px solid #DDD;
+      border: 1px solid #cfd8dc;
   }
 
   .table td, .table th:not(.line-numbers) {
-    padding: .75rem 1.5rem .75rem .75rem;
-    vertical-align: top;
-    border-top: 1px solid #ddd;
+    line-height: 34px;
+    padding:2.5px 5px;
+     vertical-align: top;
+    border-top: 1px solid #cfd8dc;
   }
 
   .table.condensed td, .table.condensed th {
@@ -585,34 +640,15 @@ import compareAsc from 'date-fns/compare_asc';
 
   .table thead th, .table.condensed thead th {
     vertical-align: bottom;
-    border-bottom:  2px solid #ddd;
+    border-bottom:  2px solid #cfd8dc;
     padding-right: 1.5rem;
-    background-color: rgba(35,41,53,0.03);
-  }
+   }
 
   tr.clickable {
     cursor: pointer;
   }
 
-  .table input{
-    display: block;
-    width: calc(100% - 24px);
-    height: 34px;
-    padding: 6px 12px;
-    font-size: 14px;
-    line-height: 1.42857143;
-    color: #555;
-    background-color: #fff;
-    background-image: none;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    -webkit-box-shadow: inset 0 1px 1px rgba(35,41,53,.075);
-    box-shadow: inset 0 1px 1px rgba(35,41,53,.075);
-    -webkit-transition: border-color ease-in-out .15s,-webkit-box-shadow ease-in-out .15s;
-    -o-transition: border-color ease-in-out .15s,box-shadow ease-in-out .15s;
-    transition: border-color ease-in-out .15s,box-shadow ease-in-out .15s;
-  }
-
+ .
   table th.sorting-asc,
   table th.sorting-desc {
     color: rgba(0, 0, 0, 0.66);
@@ -630,8 +666,8 @@ import compareAsc from 'date-fns/compare_asc';
     border-left: 6px solid transparent;
     border-right: 6px solid transparent;
     border-bottom: 6px solid rgba(0, 0, 0, 0.66);
-    margin-top:  6px;
-    margin-left:  5px;
+    margin-top: 15px;
+    margin-right: 10px;
   }
 
   table th.sorting:hover:after{
@@ -649,14 +685,17 @@ import compareAsc from 'date-fns/compare_asc';
     border-left: 6px solid transparent;
     border-right: 6px solid transparent;
     border-bottom: none;
-    margin-top:  8px;
+    margin-top: 15px;
+    margin-right: 10px;
   }
 
 .responsive {
   width: 100%;
   overflow-x: scroll;
 }
-
+.sorting {
+  cursor: pointer;
+}
 /* Table header specific styles
 ************************************************/
 
@@ -675,11 +714,10 @@ import compareAsc from 'date-fns/compare_asc';
 
   .table-footer{
     /* background-color: rgba(35,41,53, 0.03); */
-    background-color: rgba(35,41,53,0.05);
-    border: 1px solid #DDD;
-    margin-bottom:  2rem;
-    margin-top:  0px;
-    padding:  1rem;
+ 
+      min-width:300px;
+      margin:15px 0px;
+      line-height: 34px;
     border-bottom-right-radius: 5px;
     border-bottom-left-radius: 5px;
     font-size: 14px;
@@ -747,20 +785,6 @@ import compareAsc from 'date-fns/compare_asc';
   .pagination-controls .chevron.right::after{
     border-left:  6px solid rgba(0, 0, 0, 0.66);
     margin-left:  -3px;
-  }
-
-  .table-footer select {
-    display: inline-block;
-    background-color: transparent;
-    width: auto;
-    padding: 0;
-    border: 0;
-    border-radius: 0;
-    height: auto;
-    font-size: 14px;
-    margin-left: 8px;
-    color:  rgba(0, 0, 0, 0.55);
-    font-weight: bold;
   }
 
   .table-footer .perpage-count{
