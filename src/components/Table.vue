@@ -104,7 +104,6 @@
 import parse from 'date-fns/parse';
 import format from 'date-fns/format';
 import compareAsc from 'date-fns/compare_asc';
-import Spinner from 'vue-simple-spinner';
 
   export default {
     name: 'vue-good-table',
@@ -542,9 +541,6 @@ import Spinner from 'vue-simple-spinner';
           }
         }
       }
-    },
-    components: {
-      Spinner
     }
   }
 </script>

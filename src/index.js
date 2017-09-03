@@ -1,8 +1,10 @@
 import GoodTable from './components/Table.vue';
+import Spinner from 'vue-simple-spinner';
 
 const GoodTablePlugin = {
   install: function(Vue, options) {
     Vue.component(GoodTable.name, GoodTable);
+    Vue.component(Spinner.name, Spinner);
   },
 };
 
